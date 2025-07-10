@@ -1,0 +1,14 @@
+{
+  "name": "mega-zip-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "archiver": "^5.3.1",
+    "express": "^4.18.2",
+    "megajs": "^1.0.8",
+    "cors": "^2.8.5"
+  }
+}
