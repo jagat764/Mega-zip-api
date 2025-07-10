@@ -1,55 +1,50 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
+const mega = require('megajs');
 const archiver = require('archiver');
-const { Folder } = require('megajs');
-const crypto = require('crypto');
+
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 
-app.get('/', (req, res) => {
-  res.send('✅ MEGA ZIP API is running.');
-});
-
 app.get('/api/zip', async (req, res) => {
   const { url } = req.query;
 
-  if (!url || !url.startsWith('https://mega.nz/folder/')) {
-    return res.status(400).json({ error: 'Invalid or missing MEGA folder URL' });
+  if (!url || !url.includes('#')) {
+    return res.status(400).json({ error: 'Missing or invalid MEGA URL (must include decryption key)' });
   }
 
-  console.log('➡️ Request for ZIP:', url);
-
   try {
-    const folder = Folder.fromURL(url);
-    await folder.loadAttributes();
+    const file = mega.File.fromURL(url);
+    await new Promise((resolve, reject) => file.load(err => (err ? reject(err) : resolve())));
 
-    const zipId = crypto.randomBytes(4).toString('hex');
-    const zipName = `mega_${zipId}.zip`;
+    if (!file.children || file.children.length === 0) {
+      return res.status(404).json({ error: 'No files found in folder' });
+    }
 
-    res.setHeader('Content-Disposition', `attachment; filename=${zipName}`);
+    res.setHeader('Content-Disposition', 'attachment; filename=mega-folder.zip');
     res.setHeader('Content-Type', 'application/zip');
 
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.pipe(res);
 
-    for (const file of folder.children) {
-      if (!file.download) continue;
-
-      console.log(`📦 Adding: ${file.name}`);
-      const stream = file.download();
-      archive.append(stream, { name: file.name });
+    for (const child of file.children) {
+      const stream = child.download();
+      archive.append(stream, { name: child.name });
     }
 
     archive.finalize();
-  } catch (err) {
-    console.error('❌ Error:', err.message);
-    res.status(500).json({ error: 'Failed to create ZIP from MEGA folder' });
+  } catch (error) {
+    console.error('❌ Error:', error);
+    return res.status(500).json({ error: 'Failed to create ZIP from MEGA folder' });
   }
 });
 
+app.get('/', (req, res) => {
+  res.send('✅ MEGA ZIP API is running. Use /api/zip?url=https://mega.nz/folder/xxx#yyy');
+});
+
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ Server is running on port ${PORT}`);
 });
